@@ -12,7 +12,6 @@ local log = require('bqf.lib.log')
 
 local actionFor, extraOpts, isWindows
 local ctxActionFor
-local version
 local headless
 
 local function getVersion()
@@ -514,14 +513,10 @@ function M.run()
     -- greater than 1000 items is worth using headless as stream to improve user experience
     local source = size > 1000 and sourceCmd or sourceList
 
-    local baseOpt = {'--color', 'gutter:-1'}
-    if compareVersion(version, '0.27.4') >= 0 then
-        table.insert(baseOpt, '--scroll-off')
-        table.insert(baseOpt, utils.scrolloff(qwinid))
-    end
-    if compareVersion(version, '0.35.0') >= 0 then
-        table.insert(baseOpt, '--no-separator')
-    end
+    local baseOpt = { "--color", "gutter:-1" }
+    table.insert(baseOpt, "--scroll-off")
+    table.insert(baseOpt, utils.scrolloff(qwinid))
+    table.insert(baseOpt, "--no-separator")
 
     -- TODO
     -- ctx.fzf_extra_opts and ctx.fzf_action_for are used by myself, I'm not sure who wants them.
@@ -564,10 +559,20 @@ function M.run()
     end
     phandler.keepPreview()
 
-    cmd(('au BqfFilterFzf FileType fzf ++once %s'):format(
-        ([[lua require('bqf.filter.fzf').preHandle(%d, %d, %q)]]):format(qwinid, size, bind)))
-
-    fn.BqfFzfWrapper(opts)
+    local group_id = vim.api.nvim_create_augroup("BqfFilterFzf", { clear = true })
+    vim.api.nvim_create_autocmd("FileType", {
+        group = group_id,
+        pattern = "fzf",
+        callback = function()
+            M.preHandle(qwinid, size, bind)
+        end,
+    })
+    require("fzf-lua").fzf_exec(opts.source, {
+        fn_transform = function(lines)
+            return handler(qwinid, lines)
+        end,
+    })
+    -- fn.BqfFzfWrapper(opts)
 end
 
 local function init()
@@ -575,9 +580,6 @@ local function init()
         headless = {}
         return
     end
-    assert(vim.g.loaded_fzf or fn.exists('*fzf#run') == 1,
-           'fzf#run function not found. You also need Vim plugin from the main fzf repository')
-    version = getVersion()
 
     config = require('bqf.config')
 
@@ -586,7 +588,6 @@ local function init()
     vim.validate({
         action_for = {actionFor, 'table'},
         extra_opts = {extraOpts, 'table'},
-        version = {version, 'string', 'version string'}
     })
 
     filterActions(actionFor)
