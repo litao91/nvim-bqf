@@ -438,35 +438,6 @@ function M.headlessRun(hlAnsi, paddingNr, delim)
 end
 
 function M.preHandle(qwinid, size, bind)
-    local lineCount = api.nvim_buf_line_count(0)
-    local height = api.nvim_win_get_height(qwinid) + 1 - (utils.hasWinBar(qwinid) and 1 or 0)
-    api.nvim_win_set_config(0, {
-        relative = 'win',
-        win = qwinid,
-        width = api.nvim_win_get_width(qwinid),
-        height = math.min(height, lineCount + 1),
-        row = 0,
-        col = 0
-    })
-
-    -- keep fzf term away from dithering
-    if vim.o.termguicolors then
-        local winid = api.nvim_get_current_win()
-        local winbl = vim.wo[winid].winbl
-        -- https://github.com/neovim/neovim/issues/14670
-        cmd('setlocal winbl=100')
-        local stl
-        local ok, msg = pcall(api.nvim_win_get_option, qwinid, 'stl')
-        if ok then
-            stl = msg
-        end
-        vim.wo[qwinid].stl = '%#Normal#'
-        vim.defer_fn(function()
-            pcall(api.nvim_win_set_option, qwinid, 'stl', stl)
-            pcall(api.nvim_win_set_option, winid, 'winbl', winbl)
-        end, size > 1000 and 100 or 50)
-    end
-
     local actionFmt = {
         ['preview-half-page-up'] = [[<Cmd>lua require('bqf.preview.handler').scroll(-1, %d)<CR>]],
         ['preview-half-page-down'] = [[<Cmd>lua require('bqf.preview.handler').scroll(1, %d)<CR>]],
@@ -482,15 +453,6 @@ function M.preHandle(qwinid, size, bind)
             local rhs = fmt:format(qwinid)
             api.nvim_buf_set_keymap(bufnr, 't', lhs, rhs, {nowait = true})
         end
-    end
-
-    if vim.o.mouse:match('[na]') ~= nil then
-        api.nvim_buf_set_keymap(bufnr, 'n', '<LeftMouse>',
-                                [[<Cmd>lua require('bqf.preview.handler').mouseClick('t')<CR>]],
-                                {nowait = true, noremap = false})
-        api.nvim_buf_set_keymap(bufnr, 'n', '<2-LeftMouse>',
-                                [[<Cmd>lua require('bqf.preview.handler').mouseDoubleClick('t')<CR>]],
-                                {nowait = true, noremap = false})
     end
 
     if M.postHandle then
@@ -559,18 +521,26 @@ function M.run()
     end
     phandler.keepPreview()
 
-    local group_id = vim.api.nvim_create_augroup("BqfFilterFzf", { clear = true })
-    vim.api.nvim_create_autocmd("FileType", {
-        group = group_id,
-        pattern = "fzf",
-        callback = function()
-            M.preHandle(qwinid, size, bind)
-        end,
-    })
+    -- local group_id = vim.api.nvim_create_augroup("BqfFilterFzf", { clear = true })
+    -- vim.api.nvim_create_autocmd("FileType", {
+    --     group = group_id,
+    --     pattern = "fzf",
+    --     callback = function()
+    --         M.preHandle(qwinid, size, bind)
+    --     end,
+    -- })
+
+    local lineCount = api.nvim_buf_line_count(0)
+    local height = api.nvim_win_get_height(qwinid) + 1 - (utils.hasWinBar(qwinid) and 1 or 0)
     require("fzf-lua").fzf_exec(opts.source, {
-        fn_transform = function(lines)
-            return handler(qwinid, lines)
-        end,
+        winopts = {
+            relative = "win",
+            win = qwinid,
+            width = api.nvim_win_get_width(qwinid),
+            height = math.min(height, lineCount + 1),
+            row = 0,
+            col = 0,
+        },
     })
     -- fn.BqfFzfWrapper(opts)
 end
@@ -597,16 +567,6 @@ local function init()
     base = require('bqf.filter.base')
     qfs = require('bqf.qfwin.session')
     isWindows = utils.isWindows()
-
-    cmd([[
-        aug BqfFilterFzf
-            au!
-        aug END
-
-        function! BqfFzfWrapper(opts) abort
-            call fzf#run(fzf#wrap(a:opts))
-        endfunction
-    ]])
 end
 
 init()
