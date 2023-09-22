@@ -14,19 +14,6 @@ local actionFor, extraOpts, isWindows
 local ctxActionFor
 local headless
 
-local function getVersion()
-    local exe = fn['fzf#exec']()
-    local msgTbl = fn.systemlist({exe, '--version'})
-    local shError = vim.v.shell_error
-    local ver
-    if shError == 0 and type(msgTbl) == 'table' and #msgTbl > 0 then
-        ver = msgTbl[1]:match('[0-9.]+')
-    else
-        ver = ''
-    end
-    return ver
-end
-
 local function filterActions(actions)
     for key, action in pairs(actions) do
         if type(action) ~= 'string' or action:match('^%s*$') then
